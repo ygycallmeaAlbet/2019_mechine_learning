@@ -1,0 +1,765 @@
+---
+title: "Appendix"
+output: pdf_document
+---
+
+## code for 1
+
+```{r,eval=FALSE}
+ta1 <- matrix(c( 0.1910393,0.1767595,0.15385,15,13,12),ncol=3,byrow=TRUE)
+colnames(ta1) <- c("smoothing","random forest","boosting")
+rownames(ta1) <- c("RMSE","Rank")
+print("RMSE of Prediction On kaggle With Rank")
+as.table(ta1)
+
+ta2 <- matrix(c( 0.1910393,0.1767595,0.15385),ncol=3,byrow=TRUE)
+colnames(ta2) <- c("smoothing","random forest","boosting")
+rownames(ta2) <- c("RMSE")
+print("Prediction For This report")
+as.table(ta2)
+```
+
+
+## code for 3
+
+```{r,eval=FALSE}
+# input of data here
+
+
+data = read.csv('housing_price.csv')
+library('VIM') # Missing value
+library(gbm)
+library(mgcv)
+```
+
+
+## code for 4.1
+
+```{r,eval=FALSE}
+miss <- aggr(data,prop = FALSE, combined = TRUE, sortVars=TRUE)
+```
+
+
+```{r,eval=FALSE}
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+data$KITCHENS[is.na(data$KITCHENS)] <- getmode(data$KITCHENS[!is.na(data$KITCHENS)])
+
+
+
+med_diff_built_remodel <-floor(median(data$YR_RMDL[!is.na(data$YR_RMDL)&!is.na(data$AYB)]- 
+                                data$AYB[!is.na(data$YR_RMDL)&!is.na(data$AYB)] ))
+
+
+# Fill AYB and YR_RMDL
+data$YR_RMDL[is.na(data$YR_RMDL)&!is.na(data$AYB)] <-data$AYB[is.na(data$YR_RMDL)&!is.na(data$AYB)]
+
+
+#Missing Both
+#missing_both <- is.na(data$YR_RMDL)&is.na(data$AYB)
+
+#data$AYB[missing_both]<-floor(median(data$AYB[!is.na(data$AYB)]))
+
+#data$YR_RMDL[missing_both]<-data$AYB[missing_both]- med_diff_built_remodel
+
+
+#missing_built_have_remodel <- (!is.na(data$YR_RMDL)&is.na(data$AYB))
+#data$AYB[missing_built_have_remodel] <- #data$YR_RMDL[missing_built_have_remodel]-med_diff_built_remodel
+
+#data$STORIES[is.na(data$STORIES)]<-floor(median(data$STORIES[!is.na(data$STORIES)]))}
+```
+
+
+```{r,eval=FALSE}
+data[data$YR_RMDL==20,]
+data$YR_RMDL[data$YR_RMDL==20]=data$AYB[data$YR_RMDL==20]+med_diff_built_remodel
+data$AC[data$AC ==0] <- getmode(data$AC[data$AC !=0])
+data$STORIES[data$STORIES>=14] <- floor(median(data$STORIES[data$STORIES<14]))
+```
+
+
+
+
+## code for 4.3
+
+```{r,eval=FALSE}
+par(mfrow= c(1, 2))
+boxplot(data$PRICE ~ data$HEAT, main = "Heat",col= rgb(0.8,0.1,0.3,0.6))
+boxplot(data$PRICE ~ data$AC, main = "AC",col= rgb(0.8,0.1,0.3,0.6))
+boxplot(data$PRICE ~ data$GRADE, main = "Grade",col= rgb(0.8,0.1,0.3,0.6))
+boxplot(data$PRICE ~ data$CNDTN, main = "CNDTN",col= rgb(0.8,0.1,0.3,0.6))
+boxplot(data$PRICE ~ data$BATHTOTAL, main = "Total Bathroom",col= rgb(0.8,0.1,0.3,0.6))
+boxplot(data$PRICE ~ data$KITCHENS, main = "Kitchen",col= rgb(0.8,0.1,0.3,0.6))
+```         
+
+## code for 5.1
+
+```{r,eval=FALSE}
+
+data$AC <- factor(data$AC,level=c('Y','N'), label=c(1,0))
+
+data$GRADE <- as.numeric(factor(data$GRADE,level=c('Low Quality', 'Fair Quality', 'Average', 'Above Average', 'Good Quality', 'Very Good', 'Excellent', 'Superior', 'Exceptional-A', 'Exceptional-B', 'Exceptional-C', 'Exceptional-D', ordered= TRUE)))
+
+data$CNDTN <- as.numeric(factor(data$CNDTN,level=c('Poor', 'Fair', 'Average', 'Good', 'Very Good','Excellent', ordered= TRUE)))
+
+
+
+data$NATIONALGRID <- as.numeric(data$NATIONALGRID)
+
+data$ASSESSMENT_NBHD <- as.factor(data$ASSESSMENT_NBHD)
+
+data$STYLE <- as.numeric(data$STYLE)
+
+#HEAT
+#data$STRUCT <- as.numeric(data$STRUCT)
+
+#data$EXTWALL <- as.numeric(data$EXTWALL)
+#data$INTWALL <- as.numeric(data$INTWALL)
+#data$ROOF <- as.numeric(data$ROOF)
+#data$WARD <- as.numeric(data$WARD)
+#data$QUADRANT <- as.numeric(data$QUADRANT)
+
+
+
+data$HEAT <- as.character(data$HEAT)
+data$HEAT[data$HEAT=='Air-oil'|
+                data$HEAT=='Electric Rad'|
+                 data$HEAT=='Evp Cool'|
+                 data$HEAT=='Gravity Furnac'|
+                 data$HEAT=='Ind Unit'|
+                 data$HEAT=='No Data'|
+                 data$HEAT=='Wall Furnace'
+                 ] <- sample(data$HEAT[data$HEAT!='Air-oil'& data$HEAT=='Electric Rad' & data$HEAT!='Evp Cool'&
+                 data$HEAT!='Gravity Furnac'&
+                 data$HEAT!='Ind Unit'&
+                 data$HEAT!='No Data'&
+                 data$HEAT!='Wall Furnace'
+                 ],size = 8)
+data$HEAT<-as.factor(data$HEAT)
+
+
+#EXTWALL
+#data$EXTWALL[data$EXTWALL == 'Adobe'| data$EXTWALL == 'Default'| data$EXTWALL == 'Plywood' ] <- sample((data$EXTWALL[data$EXTWALL != 'Adobe'& data$EXTWALL != 'Default'& data$EXTWALL != 'Plywood' ]),size = 8)
+#data$EXTWALL<-as.factor(data$EXTWALL)
+
+
+
+data$QUADRANT[data$QUADRANT == ""] <- sample(data$QUADRANT[data$QUADRANT != ""],size = 65)
+
+#data$INTWALL[data$INTWALL == 'Vinyl Comp'] <- 'Carpet'
+
+library(gbm)
+library(mgcv)
+
+# year rebuild
+data$SALEYEAR <- as.numeric(substr(data$SALEDATE,0,4))
+data$SALEMONTH <- as.numeric(substr(data$SALEDATE,6,7))
+data$SALEDATE <- as.numeric(data$SALEDATE)
+
+RMLSE_Score <- function(real,pred, take_log = TRUE){
+  if (take_log){
+    print(sqrt(1/length(real)* sum( (log(real) -log(pred))^2 ,na.rm=TRUE )))
+  }else{
+    print(sqrt(1/length(real)* sum( (real -pred)^2 ,na.rm=TRUE )))
+  }
+}
+
+pairs(~data$HF_BATHRM + PRICE, data = data)
+```
+
+## code for 5.2
+
+```{r,eval=FALSE}
+t1 <- gam(PRICE~ s(BATHRM) + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(STORIES)+s(STYLE) + s(FIREPLACES) + s(LANDAREA) + s(ZIPCODE) + s(LATITUDE) + s(LONGITUDE) + s(CENSUS_TRACT) + GRADE + CNDTN, data=data)
+summary(t1)
+
+
+t2 <- gam(PRICE~ s(BATHRM) + s(ROOMS) + s(BEDRM) + HEAT +
+EXTWALL+ROOF+INTWALL + AC + STRUCT + KITCHENS + USECODE + ASSESSMENT_NBHD + WARD + QUADRANT , data=data)
+summary(t2, maxsum = 1)
+
+
+#####################################################################
+xg_at1 <- function(fold_num){
+  train<-data[data$fold !=fold_num,]
+  train <- subset(train, select= - c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+
+
+
+  train$PRICE = log(train$PRICE)
+
+    gam.object<- gam(PRICE~ s(BATHRM) + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(STORIES)+s
+         (STYLE) + s(FIREPLACES) + s(LANDAREA) + s(ZIPCODE) + s(LATITUDE) + s(LONGITUDE) + s(CENSUS_TRACT) + GRADE + CNDTN, data=train)
+
+
+  test<-data[data$fold ==fold_num,]
+
+  test_price <- log(test$PRICE)
+
+
+  test<-subset(test, select=-c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+
+  predict_price<-predict(gam.object,test)
+
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+}
+at1_1 <-xg_at1(1)
+at1_2 <-xg_at1(2)
+at1_3 <-xg_at1(3)
+at1_4 <-xg_at1(4)
+at1_5 <-xg_at1(5)
+total<-data.frame(rbind(at1_1,at1_2,at1_3,at1_4,at1_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+
+#####################################################################
+xg_at2 <- function(fold_num){
+  train<-data[data$fold !=fold_num,]
+  train <- subset(train, select= - c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+
+  train$PRICE = log(train$PRICE)
+
+    gam.object<- gam(PRICE~ s(BATHRM)+ HF_BATHRM + I(HF_BATHRM^2) + AC + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(SALEDATE) + s(GBA) + CNDTN  + KITCHENS + s(LANDAREA) + s(FIREPLACES) + s(ZIPCODE) + CENSUS_TRACT + ASSESSMENT_NBHD + STRUCT + GRADE  + WARD + QUADRANT + s(LATITUDE), data=train)
+
+
+  test<-data[data$fold ==fold_num,]
+
+  test_price <- log(test$PRICE)
+
+
+  test<-subset(test, select=-c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+
+  predict_price<-predict(gam.object,test)
+
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+}
+at1_1 <-xg_at2(1)
+at1_2 <-xg_at2(2)
+at1_3 <-xg_at2(3)
+at1_4 <-xg_at2(4)
+at1_5 <-xg_at2(5)
+total<-data.frame(rbind(at1_1,at1_2,at1_3,at1_4,at1_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+
+##########################################################
+sm <- gam(PRICE~ s(BATHRM)+ HF_BATHRM + I(HF_BATHRM^2) + AC + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(SALEDATE) + s(GBA) + CNDTN  + KITCHENS + s(LANDAREA) + s(FIREPLACES) + s(ZIPCODE) + CENSUS_TRACT + ASSESSMENT_NBHD + STRUCT + GRADE  + WARD + QUADRANT + s(LATITUDE), data=data)
+
+gam.check(sm)
+```
+
+
+## code for 5.3
+
+```{r,eval=FALSE}
+pairs(~ SALEDATE + ZIPCODE + CENSUS_TRACT + LATITUDE + LONGITUDE + LANDAREA + PRICE, data = data)
+
+pairs(~ BATHRM+ HF_BATHRM + I(HF_BATHRM^2) + AC + ROOMS + BEDRM+ AYB  + YR_RMDL+EYB + PRICE, data = data)
+
+
+xg_at1 <- function(fold_num){
+  train<-data[data$fold !=fold_num,]
+  train <- subset(train, select= - c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+  train$PRICE = log(train$PRICE)
+    gam.object <- gam(PRICE~ s(BATHRM)+ HF_BATHRM + I(HF_BATHRM^2) + AC + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(SALEDATE) + s(GBA) + CNDTN  + KITCHENS + s(LANDAREA) + te(LANDAREA, LONGITUDE,by =CNDTN)+ s(FIREPLACES) + s(ZIPCODE) + te(SALEDATE, ZIPCODE)+ te(SALEDATE, CENSUS_TRACT) + te(ZIPCODE,LATITUDE,LONGITUDE) + CENSUS_TRACT + ASSESSMENT_NBHD + s(LATITUDE)
+                    + STRUCT #0.1949005
+                    + GRADE
+                    + WARD # 0.1945048
+                    + QUADRANT #0.1944545 #[1] 0.1915153
+                     , data=train)
+  test<-data[data$fold ==fold_num,]
+
+  test_price <- log(test$PRICE)
+
+
+  test<-subset(test, select=-c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+
+  predict_price<-predict(gam.object,test)
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+}
+at1_1 <-xg_at1(1)
+at1_2 <-xg_at1(2)
+at1_3 <-xg_at1(3)
+at1_4 <-xg_at1(4)
+at1_5 <-xg_at1(5)
+total<-data.frame(rbind(at1_1,at1_2,at1_3,at1_4,at1_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+
+
+
+#####################################################################
+foul_num <- 1
+xg_at1 <- function(fold_num){
+  train<-data[data$fold !=fold_num,]
+  train <- subset(train, select= - c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+  train$PRICE = log(train$PRICE)
+    gam.object <- gam(PRICE~ s(BATHRM)+ HF_BATHRM + I(HF_BATHRM^2) + AC + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(SALEDATE) + s(GBA) + CNDTN  + KITCHENS + s(LANDAREA) + te(LANDAREA, LONGITUDE,by =CNDTN)+ s(FIREPLACES) + s(ZIPCODE) + te(SALEDATE, ZIPCODE)+ te(SALEDATE, CENSUS_TRACT) + te(ZIPCODE,LATITUDE,LONGITUDE) + CENSUS_TRACT + ASSESSMENT_NBHD + s(LATITUDE)
+                    + STRUCT #0.1949005
+                    + GRADE
+                    + WARD # 0.1945048
+                    + QUADRANT #0.1944545 #[1] 0.1915153
+                    + I(ROOMS^2)
+                     , data=train)
+  test<-data[data$fold ==fold_num,]
+  test_price <- log(test$PRICE)
+  test<-subset(test, select=-c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+  predict_price<-predict(gam.object,test)
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+}
+xg_at2<- function(fold_num){
+  train<-data[data$fold !=fold_num,]
+  train <- subset(train, select= - c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+  train$PRICE = log(train$PRICE)
+    gam.object <- gam(PRICE~ s(BATHRM)+ HF_BATHRM + I(HF_BATHRM^2) + AC + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(SALEDATE) + s(GBA) + CNDTN  + KITCHENS + s(LANDAREA) + te(LANDAREA, LONGITUDE,by =CNDTN)+ s(FIREPLACES) + s(ZIPCODE) + te(SALEDATE, ZIPCODE)+ te(SALEDATE, CENSUS_TRACT) + te(ZIPCODE,LATITUDE,LONGITUDE) + CENSUS_TRACT + ASSESSMENT_NBHD + s(LATITUDE)
+                    + STRUCT #0.1949005
+                    + GRADE
+                    + WARD # 0.1945048
+                    + QUADRANT #0.1944545 #[1] 0.1915153
+                    + I(BEDRM^2)
+                     , data=train)
+  test<-data[data$fold ==fold_num,]
+  test_price <- log(test$PRICE)
+  test<-subset(test, select=-c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+  predict_price<-predict(gam.object,test)
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+}
+xg_at3 <- function(fold_num){
+  train<-data[data$fold !=fold_num,]
+  train <- subset(train, select= - c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+  train$PRICE = log(train$PRICE)
+    gam.object <- gam(PRICE~ s(BATHRM)+ HF_BATHRM + I(HF_BATHRM^2) + AC + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(SALEDATE) + s(GBA) + CNDTN  + KITCHENS + s(LANDAREA) + te(LANDAREA, LONGITUDE,by =CNDTN)+ s(FIREPLACES) + s(ZIPCODE) + te(SALEDATE, ZIPCODE)+ te(SALEDATE, CENSUS_TRACT) + te(ZIPCODE,LATITUDE,LONGITUDE) + CENSUS_TRACT + ASSESSMENT_NBHD + s(LATITUDE)
+                    + STRUCT #0.1949005
+                    + GRADE
+                    + WARD # 0.1945048
+                    + QUADRANT #0.1944545 #[1] 0.1915153
+                    + I(LATITUDE^2)
+                     , data=train)
+  test<-data[data$fold ==fold_num,]
+  test_price <- log(test$PRICE)
+  test<-subset(test, select=-c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+  predict_price<-predict(gam.object,test)
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+}
+at1_1 <-xg_at1(1)
+at1_2 <-xg_at1(2)
+at1_3 <-xg_at1(3)
+at1_4 <-xg_at1(4)
+at1_5 <-xg_at1(5)
+total<-data.frame(rbind(at1_1,at1_2,at1_3,at1_4,at1_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+at1_1 <-xg_at2(1)
+at1_2 <-xg_at2(2)
+at1_3 <-xg_at2(3)
+at1_4 <-xg_at2(4)
+at1_5 <-xg_at2(5)
+total<-data.frame(rbind(at1_1,at1_2,at1_3,at1_4,at1_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+at1_1 <-xg_at3(1)
+at1_2 <-xg_at3(2)
+at1_3 <-xg_at3(3)
+at1_4 <-xg_at3(4)
+at1_5 <-xg_at3(5)
+total<-data.frame(rbind(at1_1,at1_2,at1_3,at1_4,at1_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+
+#####################################################################
+#final k
+xg_at1 <- function(fold_num){
+  train<-data[data$fold !=fold_num,]
+  train <- subset(train, select= - c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+  train$PRICE = log(train$PRICE)
+gam.object <- gam(PRICE~ s(BATHRM)+ HF_BATHRM + I(HF_BATHRM^2) + AC + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(SALEDATE) + s(GBA) + CNDTN  + KITCHENS + s(LANDAREA) + te(LANDAREA, LONGITUDE,by =CNDTN)+ s(FIREPLACES) + s(ZIPCODE) + te(SALEDATE, ZIPCODE)+ te(SALEDATE, CENSUS_TRACT) + te(ZIPCODE,LATITUDE,LONGITUDE) + CENSUS_TRACT + ASSESSMENT_NBHD + s(LATITUDE)
+                + STRUCT
+                + GRADE
+                + WARD
+                + QUADRANT
+                + I(BEDRM^2)
+                , data=train)
+
+  test<-data[data$fold ==fold_num,]
+
+  test_price <- log(test$PRICE)
+
+
+  test<-subset(test, select=-c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS))
+
+  predict_price<-predict(gam.object,test)
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+}
+at1_1 <-xg_at1(1)
+at1_2 <-xg_at1(2)
+at1_3 <-xg_at1(3)
+at1_4 <-xg_at1(4)
+at1_5 <-xg_at1(5)
+
+total<-data.frame(rbind(at1_1,at1_2,at1_3,at1_4,at1_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+
+
+mk <- gam(PRICE~ s(BATHRM)+ HF_BATHRM + I(HF_BATHRM^2) + AC + s(ROOMS) + s(BEDRM)+ s(AYB)  + s(YR_RMDL)+ s(EYB) + s(SALEDATE) + s(GBA) + CNDTN  + KITCHENS + s(LANDAREA) + te(LANDAREA, LONGITUDE,by =CNDTN)+ s(FIREPLACES) + s(ZIPCODE) + te(SALEDATE, ZIPCODE)+ te(SALEDATE, CENSUS_TRACT) + te(ZIPCODE,LATITUDE,LONGITUDE) + CENSUS_TRACT + ASSESSMENT_NBHD + s(LATITUDE)
+                    + STRUCT 
+                    + GRADE 
+                    + WARD
+                    + QUADRANT
+                    + I(BEDRM^2)
+                    , data=data)
+
+gam.check(mk)
+```
+## Code for boosting
+
+```{r, eval=FALSE}
+data <- read.csv('../data/housing_price.csv', header = TRUE)
+
+# There is a 20 value is YR_RMDL, apparently it is a wrong data
+# Fill it
+yr_rmdl_20_index <- data$YR_RMDL==20&!is.na(data$YR_RMDL)
+data[yr_rmdl_20_index,]
+data$YR_RMDL[yr_rmdl_20_index]=data$AYB[yr_rmdl_20_index]+med_diff_built_remodel
+
+# Wrong Data in AC
+data$AC[data$AC ==0] <- getmode(data$AC[data$AC !=0])
+# Wrong Data in STORIES
+
+data$STORIES[data$STORIES>=14] <-14 #floor(median(data$STORIES[data$STORIES<14]))
+
+
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+# AC
+data$AC <- factor(data$AC,level=c('Y','N'), label=c(1,0))
+# GRADE
+data$GRADE <- as.numeric(factor(data$GRADE,level=c(
+'Low Quality', 'Fair Quality', 'Average', 'Above Average', 'Good Quality', 'Very Good', 'Excellent', 'Superior', 'Exceptional-A', 'Exceptional-B', 'Exceptional-C', 'Exceptional-D', ordered= TRUE)))
+data$CNDTN <- as.numeric(factor(data$CNDTN,level=c('Poor', 'Fair', 'Average', 'Good', 'Very Good','Excellent', ordered= TRUE)))
+
+# HEAT
+data$HEAT <- as.character(data$HEAT)
+data$HEAT[data$HEAT=='Air Exchng'|
+                data$HEAT=='Elec Base Brd'|
+                 data$HEAT=='Evp Cool'|
+                 data$HEAT=='Hot Water Rad'|
+                 data$HEAT=='Ind Unit'|
+                 data$HEAT=='Wall Furnace'|
+                 data$HEAT=='Water Base Brd'|
+                 data$HEAT=='Ht Pump'|
+                 data$HEAT=='Gravity Furnac'
+                 ] <- 1
+data$HEAT[data$HEAT=='Air-Oil'|
+                data$HEAT=='Electric Rad'|
+                 data$HEAT=='Forced Air'|
+                data$HEAT=='Warm Cool'
+                 ] <- 2
+data$HEAT[data$HEAT=='No Data']<-0
+data$HEAT<-as.numeric(data$HEAT)
+
+# CENSUS_TRACT, CENSUS_BLOCK => CENSUS_BLOCK_NUM
+data$CENSUS_BLOCK_NUM <- as.numeric(trim(gsub('\\s+',
+                                                   '',
+                                               data$CENSUS_BLOCK)))
+data$CENSUS_BLOCK_NUM[is.na(data$CENSUS_BLOCK_NUM)]<-data$CENSUS_TRACT[is.na(data$CENSUS_BLOCK_NUM)]*10000
+
+data$SALEYEAR <- as.numeric(format(as.Date(data$SALEDATE), "%Y"))
+
+
+data$SalevYB <-
+                    as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                    data$AYB
+data$SalevYI <-
+                    as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                    data$EYB
+
+data$BATHTOTAL <- as.numeric(data$BATHRM+data$HF_BATHRM/2)
+
+# Take Price's log, DON'T FORGET TO TAKE EXP AFTER
+data$PRICE <- log(data$PRICE)
+
+
+data$ASSESSMENT_SUBNBHD_imputed <-
+          as.numeric(substr(data$ASSESSMENT_SUBNBHD,0,3))
+data$ASSESSMENT_SUBNBHD_imputed <-
+          ifelse(is.na(data$ASSESSMENT_SUBNBHD_imputed),28,data$ASSESSMENT_SUBNBHD_imputed)
+
+
+#data$SALEDATE <- as.numeric(data$SALEDATE)
+data$NATIONALGRID <- as.numeric(data$NATIONALGRID)
+data$ASSESSMENT_NBHD <- as.numeric(data$ASSESSMENT_NBHD)
+data$STYLE <- as.numeric(data$STYLE)
+data$STRUCT <- as.numeric(data$STRUCT)
+data$EXTWALL <- as.numeric(data$EXTWALL)
+data$INTWALL <- as.numeric(data$INTWALL)
+data$ROOF <- as.numeric(data$ROOF)
+data$WARD <- as.numeric(data$WARD)
+data$QUADRANT <- as.numeric(data$QUADRANT)
+
+
+#try
+RMLSE_Score <- function(real,pred, take_log = TRUE){
+  if (take_log){
+    print(sqrt(1/length(real)* sum( (log(real) -log(pred))^2 ,na.rm=TRUE )))
+  }else{
+    print(sqrt(1/length(real)* sum( (real -pred)^2 ,na.rm=TRUE )))
+  }
+  
+}
+
+
+library(xgboost)
+fold_num <-1
+temp_data<-data
+train<-temp_data[temp_data$fold!=fold_num,]
+train$PRICE = log(train$PRICE)
+train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+train <- subset(train, select=c(BATHRM,HF_BATHRM,HEAT,AC,ROOMS,BEDRM,
+                                  AYB,YR_RMDL,EYB,STORIES,SALEDATE,PRICE,GBA,STYLE,STRUCT,GRADE,CNDTN,
+                                  EXTWALL,ROOF,INTWALL,KITCHENS,FIREPLACES,USECODE,LANDAREA,ZIPCODE,
+                                  LATITUDE,LONGITUDE,ASSESSMENT_NBHD,CENSUS_TRACT,WARD,QUADRANT,SalevYB,SalevYI))
+dtrain <- xgb.DMatrix(data = data.matrix(subset(train, select=-c(PRICE))), label=train$PRICE)
+  
+test<-temp_data[temp_data$fold==fold_num,]
+test_price <- test$PRICE
+test<-subset(test, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+test_price <- log(test$PRICE)
+dtest <- xgb.DMatrix(data = data.matrix(subset(test, select=-c(PRICE))), label=test_price)
+watchlist <- list(train=dtrain, test=dtest)
+  
+bst4 <- xgb.train(data=dtrain, max.depth=4, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+bst5 <- xgb.train(data=dtrain, max.depth=5, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+bst6 <- xgb.train(data=dtrain, max.depth=6, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+bst7 <- xgb.train(data=dtrain, max.depth=7, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+bst8 <- xgb.train(data=dtrain, max.depth=8, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+bst9 <- xgb.train(data=dtrain, max.depth=9, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+bst10 <- xgb.train(data=dtrain, max.depth=10, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+
+
+
+library(ggplot2)
+test_price <- log(test$PRICE)
+test_accuracy <- sapply(list(bst4,bst5,bst6,bst7,bst8,bst9,bst10), function(x){
+  predict_price <- predict(x, dtest)
+  RMLSE_Score(test_price,predict_price, FALSE)
+})
+#[1] 0.01520559 0.01500764 0.01492193 0.01494255
+# [5] 0.01448932 0.01456044 0.01454242
+test_df <- data.frame(max.depth=c(4,5,6,7,8,9,10),test_accuracy=test_accuracy)
+ggplot(data=test_df, 
+       aes(x=max.depth, y=test_accuracy)) +
+  geom_path()+
+  ylab('Test accuracy for Fold1')+
+  geom_point()
+
+
+capture.output(xgb.train(data=dtrain, max.depth=8, eta=0.02, nthread = 4, nrounds=9000, watchlist=watchlist,verbose = 1), file = 'xgb_nround.txt') 
+
+
+rmse <- read.table("../Visualization/xgb_nround.txt",sep = c(':'),header = FALSE, col.names = c('row name','training error', 'testing error'))
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+rmse$row.name<-1:nrow(rmse)
+rmse$training.error<-as.numeric(unlist(regmatches(rmse$training.error,gregexpr("[[:digit:]]+\\.*[[:digit:]]*",rmse$training.error))))
+rmse$testing.error <- as.numeric(rmse$testing.error)
+
+
+ggplot(rmse[500:nrow(rmse),], aes(row.name)) +
+  geom_line(aes(y = testing.error, colour = "testing.error")) +
+  xlab('nround')+
+  ylab('Testing accuracy for Fold 1')
+  #+
+  #geom_line(aes(y = training.error, colour = "training.error"))
+
+
+ggplot(rmse[500:nrow(rmse),], aes(row.name)) +
+  #geom_line(aes(y = testing.error, colour = "testing.error")) +
+  geom_line(aes(y = training.error, colour = "training.error"))+
+  xlab('nround')+
+  ylab('Training accuracy for Fold 1')
+  
+```
+
+## Code for random forest
+```{r, eval=FALSE}
+data <- read.csv('../data/housing_price.csv', header = TRUE)
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+# Fill missing KITCHENS value with mode
+data$KITCHENS[is.na(data$KITCHENS)] <- getmode(data$KITCHENS[!is.na(data$KITCHENS)])
+
+
+med_diff_built_remodel <-floor(median(data$YR_RMDL[!is.na(data$YR_RMDL)&!is.na(data$AYB)]- 
+                                data$AYB[!is.na(data$YR_RMDL)&!is.na(data$AYB)] ))
+
+# Fill YR_RMDL
+data$YR_RMDL[is.na(data$YR_RMDL)&!is.na(data$AYB)] <-data$AYB[is.na(data$YR_RMDL)&!is.na(data$AYB)]
+
+
+# Fill the situation where both YR_RMDL and AYB are missing
+missing_both <- is.na(data$YR_RMDL)&is.na(data$AYB)
+data$AYB[missing_both]<-floor(median(data$AYB[!is.na(data$AYB)]))
+data$YR_RMDL[missing_both]<-data$AYB[missing_both]- med_diff_built_remodel
+
+
+missing_built_have_remodel <- (!is.na(data$YR_RMDL)&is.na(data$AYB))
+data$AYB[missing_built_have_remodel] <- data$YR_RMDL[missing_built_have_remodel]-med_diff_built_remodel
+
+# Fill the missing STORIES
+data$STORIES[is.na(data$STORIES)]<-floor(median(data$STORIES[!is.na(data$STORIES)]))
+
+# There is a 20 value is YR_RMDL, apparently it is a wrong data
+# Fill it
+yr_rmdl_20_index <- data$YR_RMDL==20&!is.na(data$YR_RMDL)
+data[yr_rmdl_20_index,]
+data$YR_RMDL[yr_rmdl_20_index]=data$AYB[yr_rmdl_20_index]+med_diff_built_remodel
+
+# Wrong Data in AC
+data$AC[data$AC ==0] <- getmode(data$AC[data$AC !=0])
+# Wrong Data in STORIES
+
+data$STORIES[data$STORIES>=14] <-14 #floor(median(data$STORIES[data$STORIES<14]))
+
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+# AC
+data$AC <- factor(data$AC,level=c('Y','N'), label=c(1,0))
+# GRADE
+data$GRADE <- as.numeric(factor(data$GRADE,level=c(
+'Low Quality', 'Fair Quality', 'Average', 'Above Average', 'Good Quality', 'Very Good', 'Excellent', 'Superior', 'Exceptional-A', 'Exceptional-B', 'Exceptional-C', 'Exceptional-D', ordered= TRUE)))
+data$CNDTN <- as.numeric(factor(data$CNDTN,level=c('Poor', 'Fair', 'Average', 'Good', 'Very Good','Excellent', ordered= TRUE)))
+
+# HEAT
+data$HEAT <- as.character(data$HEAT)
+data$HEAT[data$HEAT=='Air Exchng'|
+                data$HEAT=='Elec Base Brd'|
+                 data$HEAT=='Evp Cool'|
+                 data$HEAT=='Hot Water Rad'|
+                 data$HEAT=='Ind Unit'|
+                 data$HEAT=='Wall Furnace'|
+                 data$HEAT=='Water Base Brd'|
+                 data$HEAT=='Ht Pump'|
+                 data$HEAT=='Gravity Furnac'
+                 ] <- 1
+data$HEAT[data$HEAT=='Air-Oil'|
+                data$HEAT=='Electric Rad'|
+                 data$HEAT=='Forced Air'|
+                data$HEAT=='Warm Cool'
+                 ] <- 2
+data$HEAT[data$HEAT=='No Data']<-0
+data$HEAT<-as.numeric(data$HEAT)
+
+# CENSUS_TRACT, CENSUS_BLOCK => CENSUS_BLOCK_NUM
+data$CENSUS_BLOCK_NUM <- as.numeric(trim(gsub('\\s+',
+                                                   '',
+                                               data$CENSUS_BLOCK)))
+data$CENSUS_BLOCK_NUM[is.na(data$CENSUS_BLOCK_NUM)]<-data$CENSUS_TRACT[is.na(data$CENSUS_BLOCK_NUM)]*10000
+
+data$SALEYEAR <- as.numeric(format(as.Date(data$SALEDATE), "%Y"))
+
+
+data$SalevYB <-
+                    as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                    data$AYB
+data$SalevYI <-
+                    as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                    data$EYB
+
+data$BATHTOTAL <- as.numeric(data$BATHRM+data$HF_BATHRM/2)
+
+# Take Price's log, DON'T FORGET TO TAKE EXP AFTER
+data$PRICE <- log(data$PRICE)
+
+
+data$ASSESSMENT_SUBNBHD_imputed <-
+          as.numeric(substr(data$ASSESSMENT_SUBNBHD,0,3))
+data$ASSESSMENT_SUBNBHD_imputed <-
+          ifelse(is.na(data$ASSESSMENT_SUBNBHD_imputed),28,data$ASSESSMENT_SUBNBHD_imputed)
+
+
+#data$SALEDATE <- as.numeric(data$SALEDATE)
+data$NATIONALGRID <- as.numeric(data$NATIONALGRID)
+data$ASSESSMENT_NBHD <- as.numeric(data$ASSESSMENT_NBHD)
+data$STYLE <- as.numeric(data$STYLE)
+data$STRUCT <- as.numeric(data$STRUCT)
+data$EXTWALL <- as.numeric(data$EXTWALL)
+data$INTWALL <- as.numeric(data$INTWALL)
+data$ROOF <- as.numeric(data$ROOF)
+data$WARD <- as.numeric(data$WARD)
+data$QUADRANT <- as.numeric(data$QUADRANT)
+
+
+#try
+RMLSE_Score <- function(real,pred, take_log = TRUE){
+  if (take_log){
+    print(sqrt(1/length(real)* sum( (log(real) -log(pred))^2 ,na.rm=TRUE )))
+  }else{
+    print(sqrt(1/length(real)* sum( (real -pred)^2 ,na.rm=TRUE )))
+  }
+  
+}
+
+library(ranger)
+fold_num <- 1
+  temp_data<- data
+  train <- temp_data[temp_data$fold != fold_num,]
+  
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+  train <- subset(train, select = -c(Id, fold))
+  
+  
+  test <- temp_data[temp_data$fold == fold_num,]
+  test_price <- test$PRICE
+  test <- subset(test, select = -c(PRICE, Id, fold))
+  form <- as.formula('PRICE~YR_RMDL+ SALEDATE+GBA+STRUCT+GRADE+CNDTN+FIREPLACES+USECODE+
+                 LANDAREA+ZIPCODE+NATIONALGRID+LATITUDE+LONGITUDE+ASSESSMENT_SUBNBHD+
+                 CENSUS_TRACT+WARD+QUADRANT+CENSUS_BLOCK_NUM+SALEYEAR+SalevYB+SalevYI+
+                 BATHTOTAL+ASSESSMENT_SUBNBHD_imputed')
+
+ranger_models <- lapply(seq(4,14,2), function(x){
+  return (
+    ranger(form, data = train,importance = "permutation",mtry = x,num.trees = 750,min.node.size=2,max.depth = 25,seed=12345,verbose = 0)
+  )
+})
+
+
+#saveRDS(ranger_models,'ranger_models.RDS')
+test_accuracy<- sapply(ranger_models, function(x){
+  rfpredict <- predict(x, test)$predictions
+  RMLSE_Score(test_price,rfpredict, FALSE)
+  
+})
+#[1] 0.1752901 0.1739828 0.1737324 0.1746719
+#[5] 0.1749235 0.1756615
+
+
+library(ggplot2)
+
+test_df <- data.frame(mtry=seq(4,14,2),test_accuracy=test_accuracy)
+ggplot(data=test_df, 
+       aes(x=mtry, y=test_accuracy)) +
+  geom_path()+
+  ylab('Test accuracy for Fold1')+
+  geom_point()
+
+ranger_models_max_depth <- lapply(seq(10,30,5), function(x){
+  return (
+    ranger(form, data = train,importance = "permutation",mtry = 8,num.trees = 750,min.node.size=2,max.depth = x,seed=12345,verbose = 0)
+  )
+})
+
+test_accuracy_max_depth<- sapply(ranger_models_max_depth, function(x){
+  rfpredict <- predict(x, test)$predictions
+  RMLSE_Score(test_price,rfpredict, FALSE)
+  
+})
+#[1] 0.1962009
+#[1] 0.1765021
+#[1] 0.1739121
+#[1] 0.1737324
+#[1] 0.1737321
+
+test_df <- data.frame(max.depth =seq(10,30,5),test_accuracy=test_accuracy_max_depth)
+ggplot(data=test_df, 
+       aes(x=max.depth , y=test_accuracy)) +
+  geom_path()+
+  ylab('Test accuracy for Fold1')+
+  geom_point()
+```

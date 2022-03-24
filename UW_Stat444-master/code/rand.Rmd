@@ -1,0 +1,480 @@
+---
+title: "Visualization"
+author: "Xavier"
+date: "April 8, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Install latest reticulate
+#library(devtools)
+#install_github("rstudio/reticulate")
+
+library(reticulate)
+#use_python('D:\\Anaconda\\python.exe')
+```
+# 1. Load data
+
+
+
+
+
+```{R}
+data <- read.csv('../data/housing_price.csv', header = TRUE)
+
+
+```
+
+
+
+```{r}
+
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+data$KITCHENS[is.na(data$KITCHENS)] <- getmode(data$KITCHENS[!is.na(data$KITCHENS)])
+
+
+
+med_diff_built_remodel <-floor(median(data$YR_RMDL[!is.na(data$YR_RMDL)&!is.na(data$AYB)]- 
+                                data$AYB[!is.na(data$YR_RMDL)&!is.na(data$AYB)] ))
+
+
+# Fill AYB and YR_RMDL
+data$YR_RMDL[is.na(data$YR_RMDL)&!is.na(data$AYB)] <-data$AYB[is.na(data$YR_RMDL)&!is.na(data$AYB)]
+
+
+#Missing Both
+missing_both <- is.na(data$YR_RMDL)&is.na(data$AYB)
+
+data$AYB[missing_both]<-floor(median(data$AYB[!is.na(data$AYB)]))
+
+data$YR_RMDL[missing_both]<-data$AYB[missing_both]- med_diff_built_remodel
+
+
+missing_built_have_remodel <- (!is.na(data$YR_RMDL)&is.na(data$AYB))
+data$AYB[missing_built_have_remodel] <- data$YR_RMDL[missing_built_have_remodel]-med_diff_built_remodel
+
+data$STORIES[is.na(data$STORIES)]<-floor(median(data$STORIES[!is.na(data$STORIES)]))
+```
+
+
+##Outliers / Extreme value
+
+By eyeball the data, we can see there is several outliers
+```{r}
+yr_rmdl_20_index <- data$YR_RMDL==20&!is.na(data$YR_RMDL)
+data[yr_rmdl_20_index,]
+data$YR_RMDL[yr_rmdl_20_index]=data$AYB[yr_rmdl_20_index]+med_diff_built_remodel
+data$AC[data$AC ==0] <- getmode(data$AC[data$AC !=0])
+```
+
+```{r}
+data$STORIES[data$STORIES>=14] <-14 #floor(median(data$STORIES[data$STORIES<14]))
+```
+The height of buildings in Washington is limited by the Height of Buildings Act.  	Tallest residential building in Washington, D.C. Tallest building completed in the city in the 2000s has 14 floors
+
+```{r}
+#write.csv(data,'../data/pre_data.csv')
+```
+
+##Encode
+
+```{r}
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+data$AC <- factor(data$AC,level=c('Y','N'), label=c(1,0))
+data$GRADE <- as.numeric(factor(data$GRADE,level=c(
+'Low Quality', 'Fair Quality', 'Average', 'Above Average', 'Good Quality', 'Very Good', 'Excellent', 'Superior', 'Exceptional-A', 'Exceptional-B', 'Exceptional-C', 'Exceptional-D', ordered= TRUE)))
+data$CNDTN <- as.numeric(factor(data$CNDTN,level=c('Poor', 'Fair', 'Average', 'Good', 'Very Good','Excellent', ordered= TRUE)))
+
+
+
+data$HEAT <- as.numeric(data$HEAT)
+#data$SALEDATE <- as.numeric(data$SALEDATE)
+data$NATIONALGRID <- as.numeric(data$NATIONALGRID)
+data$ASSESSMENT_NBHD <- as.numeric(data$ASSESSMENT_NBHD)
+data$STYLE <- as.numeric(data$STYLE)
+data$STRUCT <- as.numeric(data$STRUCT)
+data$EXTWALL <- as.numeric(data$EXTWALL)
+data$INTWALL <- as.numeric(data$INTWALL)
+data$ROOF <- as.numeric(data$ROOF)
+data$WARD <- as.numeric(substr(data$WARD,5,6))
+data$QUADRANT <- as.numeric(data$QUADRANT)
+#try
+RMLSE_Score <- function(real,pred, take_log = TRUE){
+  if (take_log){
+    print(sqrt(1/length(real)* sum( (log(real) -log(pred))^2 ,na.rm=TRUE )))
+  }else{
+    print(sqrt(1/length(real)* sum( (real -pred)^2 ,na.rm=TRUE )))
+  }
+  
+}
+```
+
+
+
+```{r}
+library(tictoc)
+library(ranger)
+rand_at1<-function(fold_num){
+  temp_data <- data
+  temp_data$PRICE <- log(temp_data$PRICE)
+  train <- temp_data[temp_data$fold != fold_num,]
+  
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+  train <- subset(train, select = -c(Id, fold, ASSESSMENT_SUBNBHD, 
+                                     FULLADDRESS,
+                                     CENSUS_BLOCK))
+  
+  
+  test <- temp_data[temp_data$fold == fold_num,]
+  test.price <- test$PRICE
+  test <- subset(test, select = -c(PRICE, Id, fold, ASSESSMENT_SUBNBHD, 
+                                   FULLADDRESS,
+                                   CENSUS_BLOCK))
+  
+  rf <- ranger(PRICE~ CENSUS_TRACT+NATIONALGRID+GRADE+SALEDATE+LONGITUDE+LATITUDE+
+                  BATHRM+ZIPCODE+EYB+WARD+GBA+ 
+                  YR_RMDL+LANDAREA+CNDTN+AYB
+                , data = train,importance = "permutation",mtry = 11,num.trees = 800,min.node.size=1)
+  rfpredict <- predict(rf, test)$predictions
+  RMLSE_Score(test.price,rfpredict, FALSE)
+  
+  return (rfpredict)
+}
+at15 <- rand_at1(5)
+
+```
+```{r}
+library(ranger)
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+
+rand_at2<-function(fold_num){
+  temp_data <- data
+  temp_data$HEAT <- as.character(data$HEAT)
+  temp_data$HEAT[temp_data$HEAT=='Air Exchng'|
+                  temp_data$HEAT=='Elec Base Brd'|
+                   temp_data$HEAT=='Evp Cool'|
+                   temp_data$HEAT=='Hot Water Rad'|
+                   temp_data$HEAT=='Ind Unit'|
+                   temp_data$HEAT=='Wall Furnace'|
+                   temp_data$HEAT=='Water Base Brd'|
+                   temp_data$HEAT=='Ht Pump'|
+                   temp_data$HEAT=='Gravity Furnac'
+                   ] <- 1
+  temp_data$HEAT[temp_data$HEAT=='Air-Oil'|
+                  temp_data$HEAT=='Electric Rad'|
+                   temp_data$HEAT=='Forced Air'|
+                  temp_data$HEAT=='Warm Cool'
+                   ] <- 2
+  temp_data$HEAT[temp_data$HEAT=='No Data']<-0
+  temp_data$HEAT<-as.numeric(temp_data$HEAT)
+  
+  temp_data$CENSUS_BLOCK_NUM <- as.numeric(trim(gsub('^\\d+\\s+',
+                                                     '',
+                                                     temp_data$CENSUS_BLOCK)))
+  temp_data$CENSUS_BLOCK_NUM[is.na(temp_data$CENSUS_BLOCK_NUM)]<-0
+  temp_data$SALEDATE <- as.Date(paste(format(as.Date(data$SALEDATE), "%Y-%m"),"-01",sep=""))
+  temp_data$SalevYB <-
+                      as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                      data$AYB
+  temp_data$SalevYI <-
+                      as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                      data$EYB
+  temp_data$PRICE <- log(temp_data$PRICE)
+  train <- temp_data[temp_data$fold != fold_num,]
+  
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+  train <- subset(train, select = -c(Id, fold, ASSESSMENT_SUBNBHD, 
+                                     FULLADDRESS,
+                                     CENSUS_BLOCK))
+  
+  
+  test <- temp_data[temp_data$fold == fold_num,]
+  test_price <- test$PRICE
+  test <- subset(test, select = -c(PRICE, Id, fold, ASSESSMENT_SUBNBHD, 
+                                   FULLADDRESS,
+                                   CENSUS_BLOCK))
+  
+  rf <- ranger(PRICE~ CENSUS_TRACT+GRADE+SALEDATE+LONGITUDE+
+                 LATITUDE+BATHRM+ZIPCODE+EYB+WARD+
+                 GBA+CENSUS_BLOCK_NUM+
+                  YR_RMDL+LANDAREA+CNDTN+AYB
+                #+ SalevYB+SalevYI 
+               , data = train,importance = "permutation",mtry = 12,num.trees = 750,min.node.size=3,max.depth = 25,seed=12345)
+  rfpredict <- predict(rf, test)$predictions
+  RMLSE_Score(test_price,rfpredict, FALSE)
+  return (cbind(temp_data[temp_data$fold==fold_num,]$Id,PRICE = rfpredict,Actual=test_price))
+  #return (rfpredict)
+}
+at2_1 <- rand_at2(1)
+at2_2 <- rand_at2(2)
+at2_3 <- rand_at2(3)
+at2_4 <- rand_at2(4)
+at2_5 <- rand_at2(5)
+
+rand_for<-
+  data.frame(
+rbind(at2_1,at2_2,at2_3,at2_4,at2_5)
+)
+RMLSE_Score(rand_for$Actual,rand_for$PRICE, FALSE)
+
+```
+```{r}
+library(ranger)
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+temp_data <- data
+temp_data$HEAT <- as.character(data$HEAT)
+temp_data$HEAT[temp_data$HEAT=='Air Exchng'|
+                temp_data$HEAT=='Elec Base Brd'|
+                 temp_data$HEAT=='Evp Cool'|
+                 temp_data$HEAT=='Hot Water Rad'|
+                 temp_data$HEAT=='Ind Unit'|
+                 temp_data$HEAT=='Wall Furnace'|
+                 temp_data$HEAT=='Water Base Brd'|
+                 temp_data$HEAT=='Ht Pump'|
+                 temp_data$HEAT=='Gravity Furnac'
+                 ] <- 1
+temp_data$HEAT[temp_data$HEAT=='Air-Oil'|
+                temp_data$HEAT=='Electric Rad'|
+                 temp_data$HEAT=='Forced Air'|
+                temp_data$HEAT=='Warm Cool'
+                 ] <- 2
+temp_data$HEAT[temp_data$HEAT=='No Data']<-0
+temp_data$HEAT<-as.numeric(temp_data$HEAT)
+
+temp_data$CENSUS_BLOCK_NUM <- as.numeric(trim(gsub('\\s+',
+                                                   '',
+                             temp_data$CENSUS_BLOCK)))
+temp_data$CENSUS_BLOCK_NUM[is.na(temp_data$CENSUS_BLOCK_NUM)]<-temp_data$CENSUS_TRACT[is.na(temp_data$CENSUS_BLOCK_NUM)]*10000
+temp_data$SALEYEAR <- as.numeric(format(as.Date(data$SALEDATE), "%Y"))
+
+
+temp_data$SalevYB <-
+                    as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                    data$AYB
+temp_data$SalevYI <-
+                    as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                    data$EYB
+temp_data$PRICE <- log(temp_data$PRICE)
+
+rand_at3<-function(fold_num){
+
+  train <- temp_data[temp_data$fold != fold_num,]
+  
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+  train <- subset(train, select = -c(Id, fold, ASSESSMENT_SUBNBHD, 
+                                     FULLADDRESS,
+                                     CENSUS_BLOCK))
+  
+  
+  test <- temp_data[temp_data$fold == fold_num,]
+  test_price <- test$PRICE
+  test <- subset(test, select = -c(PRICE, Id, fold, ASSESSMENT_SUBNBHD, 
+                                   FULLADDRESS,
+                                   CENSUS_BLOCK))
+  
+  rf <- ranger(PRICE~ CENSUS_TRACT+GRADE+SALEDATE+LONGITUDE+
+                 LATITUDE+BATHRM+ZIPCODE+EYB+WARD+
+                 SALEYEAR+
+                 GBA+CENSUS_BLOCK_NUM+
+                  YR_RMDL+LANDAREA+CNDTN+AYB
+                + SalevYB+SalevYI 
+               , data = train,importance = "permutation",mtry = 6,num.trees = 750,min.node.size=2,max.depth = 25,seed=12345)
+  rfpredict <- predict(rf, test)$predictions
+  RMLSE_Score(test_price,rfpredict, FALSE)
+  return (cbind(temp_data[temp_data$fold==fold_num,]$Id,PRICE = rfpredict,Actual=test_price))
+  #return (rfpredict)
+}
+at3_1 <- rand_at3(1)
+at3_2 <- rand_at3(2)
+at3_3 <- rand_at3(3)
+at3_4 <- rand_at3(4)
+at3_5 <- rand_at3(5)
+
+rand_for<-
+  data.frame(
+rbind(at3_1,at3_2,at3_3,at3_4,at3_5)
+)
+RMLSE_Score(rand_for$Actual,rand_for$PRICE, FALSE)
+
+``` 
+
+```{r}
+library(ranger)
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+temp_data <- data
+temp_data$HEAT <- as.character(data$HEAT)
+temp_data$HEAT[temp_data$HEAT=='Air Exchng'|
+                temp_data$HEAT=='Elec Base Brd'|
+                 temp_data$HEAT=='Evp Cool'|
+                 temp_data$HEAT=='Hot Water Rad'|
+                 temp_data$HEAT=='Ind Unit'|
+                 temp_data$HEAT=='Wall Furnace'|
+                 temp_data$HEAT=='Water Base Brd'|
+                 temp_data$HEAT=='Ht Pump'|
+                 temp_data$HEAT=='Gravity Furnac'
+                 ] <- 1
+temp_data$HEAT[temp_data$HEAT=='Air-Oil'|
+                temp_data$HEAT=='Electric Rad'|
+                 temp_data$HEAT=='Forced Air'|
+                temp_data$HEAT=='Warm Cool'
+                 ] <- 2
+temp_data$HEAT[temp_data$HEAT=='No Data']<-0
+temp_data$HEAT<-as.numeric(temp_data$HEAT)
+
+temp_data$CENSUS_BLOCK_NUM <- as.numeric(trim(gsub('\\s+',
+                                                   '',
+                             temp_data$CENSUS_BLOCK)))
+temp_data$CENSUS_BLOCK_NUM[is.na(temp_data$CENSUS_BLOCK_NUM)]<-temp_data$CENSUS_TRACT[is.na(temp_data$CENSUS_BLOCK_NUM)]*10000
+temp_data$SALEYEAR <- as.numeric(format(as.Date(data$SALEDATE), "%Y"))
+
+
+temp_data$SalevYB <-
+                    as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                    data$AYB
+temp_data$SalevYI <-
+                    as.numeric(format(as.Date(data$SALEDATE),'%Y'))-
+                    data$EYB
+temp_data$PRICE <- log(temp_data$PRICE)
+temp_data$BATHTOTAL <- temp_data$BATHRM+temp_data$HF_BATHRM/2
+
+raw_data <- read.csv('../data/housing_price.csv', header = TRUE)
+
+temp_data$ASSESSMENT_SUBNBHD_imputed <-
+          as.numeric(substr(raw_data$ASSESSMENT_SUBNBHD,0,3))
+temp_data$ASSESSMENT_SUBNBHD_imputed <-
+          ifelse(is.na(temp_data$ASSESSMENT_SUBNBHD_imputed),28,temp_data$ASSESSMENT_SUBNBHD_imputed)
+
+
+
+rand_at4<-function(fold_num){
+
+  train <- temp_data[temp_data$fold != fold_num,]
+  
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+  train <- subset(train, select = -c(Id, fold, ASSESSMENT_SUBNBHD, 
+                                     FULLADDRESS,
+                                     CENSUS_BLOCK))
+  
+  
+  test <- temp_data[temp_data$fold == fold_num,]
+  test_price <- test$PRICE
+  test <- subset(test, select = -c(PRICE, Id, fold, ASSESSMENT_SUBNBHD, 
+                                   FULLADDRESS,
+                                   CENSUS_BLOCK))
+  
+  rf <- ranger(PRICE~ CENSUS_TRACT+GRADE+SALEDATE+LONGITUDE+
+                 LATITUDE+BATHRM+ZIPCODE+EYB+WARD+BATHTOTAL+
+                 SALEYEAR+ ASSESSMENT_SUBNBHD_imputed +
+                 GBA+CENSUS_BLOCK_NUM+
+                  YR_RMDL+LANDAREA+CNDTN+AYB
+                + SalevYB+SalevYI 
+               , data = train,importance = "permutation",mtry = 6,num.trees = 750,min.node.size=2,max.depth = 25,seed=12345)
+  rfpredict <- predict(rf, test)$predictions
+  RMLSE_Score(test_price,rfpredict, FALSE)
+  return (cbind(temp_data[temp_data$fold==fold_num,]$Id,PRICE = rfpredict,Actual=test_price))
+  #return (rfpredict)
+}
+at4_1 <- rand_at4(1)
+at4_2 <- rand_at4(2)
+at4_3 <- rand_at4(3)
+at4_4 <- rand_at4(4)
+at4_5 <- rand_at4(5)
+
+rand_for<-
+  data.frame(
+rbind(at4_1,at4_2,at4_3,at4_4,at4_5)
+)
+RMLSE_Score(rand_for$Actual,rand_for$PRICE, FALSE)
+
+```
+
+```{r}
+genetic_base<-function(fold_num,user_form){
+
+  train <- temp_data[temp_data$fold != fold_num,]
+  
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+  train <- subset(train, select = -c(Id, fold#, ASSESSMENT_SUBNBHD, 
+                                     #FULLADDRESS,
+                                     #CENSUS_BLOCK
+                                     ))
+  
+  
+  test <- temp_data[temp_data$fold == fold_num,]
+  test_price <- test$PRICE
+  test <- subset(test, select = -c(PRICE, Id, fold#, ASSESSMENT_SUBNBHD, 
+                                   #FULLADDRESS,
+                                   #CENSUS_BLOCK
+                                   ))
+  
+  rf <- ranger(user_form, data = train,importance = "permutation",mtry = 6,num.trees = 750,min.node.size=2,max.depth = 25,seed=12345,verbose=FALSE)
+  rfpredict <- predict(rf, test)$predictions
+  #RMLSE_Score(test_price,rfpredict, FALSE)
+  return (cbind(temp_data[temp_data$fold==fold_num,]$Id,PRICE = rfpredict,Actual=test_price))
+}
+
+genetic_par <- function(){
+  #global_score<-0.1796661
+  #all_para <- c("CENSUS_TRACT","GRADE","SALEDATE","LONGITUDE","LATITUDE","BATHRM","ZIPCODE","EYB","WARD","BATHTOTAL","SALEYEAR","ASSESSMENT_SUBNBHD_imputed","GBA","CENSUS_BLOCK_NUM","YR_RMDL","LANDAREA","CNDTN","AYB","SalevYB","SalevYI")
+  all_para <- colnames( subset(temp_data, select = -c(Id, fold, PRICE)))
+  form <- as.formula(paste("PRICE~",
+                            paste(all_para, collapse = '+')))
+  
+  gen1 <- genetic_base(1,form)
+  gen2 <- genetic_base(2,form)
+  gen3 <- genetic_base(3,form)
+  gen4 <- genetic_base(4,form)
+  gen5 <- genetic_base(5,form)
+  rand_for<-data.frame(rbind(gen1,gen2,gen3,gen4,gen5))
+  
+  global_score<-RMLSE_Score(rand_for$Actual,rand_for$PRICE, FALSE)
+  
+  for (i in seq(40,10,-1)){
+    k <- 1
+    print(paste('i is',i))
+    while (TRUE) {
+      print(paste('k is',k))
+      if(k == i){
+        
+        return ("gg")
+      }
+      temp_para <- all_para[-k]
+      form <- as.formula(paste("PRICE~",
+                            paste(temp_para, collapse = '+')))
+      gen1 <- genetic_base(1,form)
+      gen2 <- genetic_base(2,form)
+      gen3 <- genetic_base(3,form)
+      gen4 <- genetic_base(4,form)
+      gen5 <- genetic_base(5,form)
+      rand_for<-data.frame(rbind(gen1,gen2,gen3,gen4,gen5))
+      
+      our_score<-RMLSE_Score(rand_for$Actual,rand_for$PRICE, FALSE)
+      if (our_score<global_score){
+        all_para <- temp_para
+        global_score <- our_score
+        print(all_para)
+        print(our_score)
+        cat(paste('i is',i)
+            ,file="outfile.txt",sep="\n")
+        cat(paste(all_para,our_score, collapse=', ')
+            ,file="outfile.txt",sep="\n")
+        break
+      }else{
+        print(paste(k,' gg'))
+      }
+      k <- k+1
+    }
+    
+  }
+ 
+}
+
+genetic_par()
+
+```

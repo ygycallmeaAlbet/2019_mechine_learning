@@ -1,0 +1,503 @@
+---
+title: "Visualization"
+author: "Xavier"
+date: "April 8, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Install latest reticulate
+#library(devtools)
+#install_github("rstudio/reticulate")
+
+library(reticulate)
+#use_python('D:\\Anaconda\\python.exe')
+```
+# 1. Load data
+
+
+
+
+```{r, echo=FALSE}
+library('ggplot2')# visualization
+library('ggthemes')
+library('scales')
+library('VIM') # Missing value
+library('dplyr')# data manipulation
+
+library('mice')#imputation
+```
+```{R}
+data <- read.csv('../data/housing_price.csv', header = TRUE)
+
+
+```
+
+
+
+
+As we could see from above, there are 39520 rows of data. For YR_RMDL column, there are 16351 missing values, 61 for AYB, 26 for stories and only 1 for KITCHENS
+
+For Kitchens, it is easy to decide. since most of this kind of property only have one kitchener, so we fill it will mode 1
+
+For YR_RMDL we fill with AYB since if it is missing value it is not remodeled
+```{r}
+
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+#data$KITCHENS[is.na(data$KITCHENS)] <- getmode(data$KITCHENS[!is.na(data$KITCHENS)])
+
+
+
+med_diff_built_remodel <-floor(median(data$YR_RMDL[!is.na(data$YR_RMDL)&!is.na(data$AYB)]- 
+                                data$AYB[!is.na(data$YR_RMDL)&!is.na(data$AYB)] ))
+
+
+# Fill AYB and YR_RMDL
+#data$YR_RMDL[is.na(data$YR_RMDL)&!is.na(data$AYB)] <-data$AYB[is.na(data$YR_RMDL)&!is.na(data$AYB)]
+
+
+#Missing Both
+#missing_both <- is.na(data$YR_RMDL)&is.na(data$AYB)
+
+#data$AYB[missing_both]<-floor(median(data$AYB[!is.na(data$AYB)]))
+
+#data$YR_RMDL[missing_both]<-data$AYB[missing_both]- med_diff_built_remodel
+
+
+#missing_built_have_remodel <- (!is.na(data$YR_RMDL)&is.na(data$AYB))
+#data$AYB[missing_built_have_remodel] <- data$YR_RMDL[missing_built_have_remodel]-med_diff_built_remodel
+
+#data$STORIES[is.na(data$STORIES)]<-floor(median(data$STORIES[!is.na(data$STORIES)]))
+```
+
+
+##Outliers / Extreme value
+
+By eyeball the data, we can see there is several outliers
+```{r}
+yr_rmdl_20_index <- data$YR_RMDL==20&!is.na(data$YR_RMDL)
+data[yr_rmdl_20_index,]
+data$YR_RMDL[yr_rmdl_20_index]=data$AYB[yr_rmdl_20_index]+med_diff_built_remodel
+data$AC[data$AC ==0] <- getmode(data$AC[data$AC !=0])
+```
+
+```{r}
+data$STORIES[data$STORIES>=14] <- floor(median(data$STORIES[data$STORIES<14]))
+```
+The height of buildings in Washington is limited by the Height of Buildings Act.  	Tallest residential building in Washington, D.C. Tallest building completed in the city in the 2000s has 14 floors
+
+```{r}
+#write.csv(data,'../data/pre_data.csv')
+```
+
+##Encode
+
+```{r}
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+data$AC <- factor(data$AC,level=c('Y','N'), label=c(1,0))
+data$GRADE <- as.numeric(factor(data$GRADE,level=c(
+'Low Quality', 'Fair Quality', 'Average', 'Above Average', 'Good Quality', 'Very Good', 'Excellent', 'Superior', 'Exceptional-A', 'Exceptional-B', 'Exceptional-C', 'Exceptional-D', ordered= TRUE)))
+data$CNDTN <- as.numeric(factor(data$CNDTN,level=c('Poor', 'Fair', 'Average', 'Good', 'Very Good','Excellent', ordered= TRUE)))
+```
+
+#data$HEAT <- as.numeric(data$HEAT)
+#data$Year <- as.numeric(format(as.Date(data$SALEDATE), "%Y"))
+#data$Month <- as.numeric(format(as.Date(data$SALEDATE), "%M"))
+#data$Date <- as.numeric(format(as.Date(data$SALEDATE), "%d"))
+#data$SALEDATE <- as.numeric(data$SALEDATE)
+data$NATIONALGRID <- as.numeric(data$NATIONALGRID)
+data$ASSESSMENT_NBHD <- as.numeric(data$ASSESSMENT_NBHD)
+#data$STYLE <- as.numeric(data$STYLE)
+
+deal_style <- function(da){
+  
+  style <- da$STYLE
+  fin_unfin <- ifelse(grepl("(Fin)$", style), 1,0)+
+               ifelse(grepl("(Fin|Unfin)$", style), 1,0)
+  da$Fin <- fin_unfin
+  short_style <-  trim(gsub('(Fin|Unfin)$','',style))
+  
+  da$ShortStyle <- as.numeric(factor(short_style,level=c('Vacant', 'Default', 'Split Foyer', 'Bi-Level','Split Level' ,'1 Story', '1.5 Story', '2 Story', '2.5 Story', '3 Story', '3.5 Story', '4 Story','4.5 Story', ordered= TRUE)))
+  
+  return (da)
+}
+#data <- deal_style(data)
+
+  
+data$STRUCT <- as.numeric(data$STRUCT)
+data$EXTWALL <- as.numeric(data$EXTWALL)
+data$INTWALL <- as.numeric(data$INTWALL)
+data$ROOF <- as.numeric(data$ROOF)
+data$WARD <- as.numeric(data$WARD)
+data$QUADRANT <- as.numeric(data$QUADRANT)
+
+#try
+
+
+
+
+
+
+library(xgboost)
+fold_num=1
+train<-data[data$fold!=fold_num,]
+train <- subset(train, select=-c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS,LATITUDE,LONGITUDE,CENSUS_BLOCK))
+train$PRICE = log(train$PRICE)
+dtrain <- xgb.DMatrix(data = data.matrix(subset(train, select=-c(PRICE))), label=train$PRICE)
+
+test<-data[data$fold==fold_num,]
+test_price <- test$PRICE
+test<-subset(test, select=-c(Id,fold, ASSESSMENT_SUBNBHD,FULLADDRESS,LATITUDE,LONGITUDE,CENSUS_BLOCK))
+
+
+#CENSUS_BLOCK
+test_price <- log(test$PRICE)
+
+dtest <- xgb.DMatrix(data = data.matrix(subset(test, select=-c(PRICE))), label=test_price)
+watchlist <- list(train=dtrain, test=dtest)
+
+bst <- xgb.train(data=dtrain, max.depth=8, eta=0.03, nthread = 4, nrounds=5000, watchlist=watchlist)
+predict_price <- predict(bst, dtest)
+
+#bstDMatrix <- xgboost(data = data.matrix(subset(train, select=-c(PRICE))), label = train$PRICE,  max.depth=5,nthread = 4, max_,nround = 400,verbose = 1,eval_metric='rmse' )
+#predict_price<-predict(bstDMatrix,data.matrix(test))
+RMLSE_Score(test_price,predict_price, FALSE)
+
+
+
+
+```{r}
+library(tictoc)
+library(xgboost)
+
+xg_at1<- function(fold_num,roundn = 2600){
+  tic()
+  train<-data[data$fold!=fold_num,]
+  #LATITUDE,LONGITUDE
+  train <- subset(train, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  train$PRICE = log(train$PRICE)
+  dtrain <- xgb.DMatrix(data = data.matrix(subset(train, select=-c(PRICE))), label=train$PRICE)
+  
+  test<-data[data$fold==fold_num,]
+  test_price <- test$PRICE
+  test<-subset(test, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  
+  
+  
+  test_price <- log(test$PRICE)
+  
+  dtest <- xgb.DMatrix(data = data.matrix(subset(test, select=-c(PRICE))), label=test_price)
+  watchlist <- list(train=dtrain, test=dtest)
+  
+  bst <- xgb.train(data=dtrain, max.depth=8, eta=0.02, nthread = 4, nrounds=2600, watchlist=watchlist,verbose = 0)
+  predict_price <- predict(bst, dtest)
+  RMLSE_Score(test_price,predict_price, FALSE)
+  toc()
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+
+}
+
+
+#bstDMatrix <- xgboost(data = data.matrix(subset(train, select=-c(PRICE))), label = train$PRICE,  max.depth=5,nthread = 4, max_,nround = 400,verbose = 1,eval_metric='rmse' )
+#predict_price<-predict(bstDMatrix,data.matrix(test))
+#RMLSE_Score(test_price,predict_price, FALSE)
+
+at1_1 <-xg_at1(1)
+
+at1_2 <-xg_at1(2)
+at1_3 <-xg_at1(3)
+at1_4 <-xg_at1(4)
+at1_5 <-xg_at1(5)
+
+total<-data.frame(rbind(at1_1,at1_2,at1_3,at1_4,at1_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+to_sub <-data.frame(Id=total$V1,PRICE=exp(total$predict_price))
+#write.csv(to_sub,'../first.csv',row.names = FALSE)
+```
+
+```{r}
+#full_name <- trim(data$FULLADDRESS)
+#data$StreetName <- (trim(gsub('^\\s*\\d+','', data$FULLADDRESS)))
+#data$StreetName[data$StreetName ==''] <- NA
+xg_at2<- function(fold_num,roundn = 2600){
+  tic()
+  
+  train<-data[data$fold!=fold_num,]
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+
+  #LATITUDE,LONGITUDE
+  train <- subset(train, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  train$PRICE = log(train$PRICE)
+  dtrain <- xgb.DMatrix(data = data.matrix(subset(train, select=-c(PRICE))), label=train$PRICE)
+  
+  test<-data[data$fold==fold_num,]
+  test_price <- test$PRICE
+  test<-subset(test, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  
+  
+  
+  test_price <- log(test$PRICE)
+  
+  dtest <- xgb.DMatrix(data = data.matrix(subset(test, select=-c(PRICE))), label=test_price)
+  watchlist <- list(train=dtrain, test=dtest)
+  
+  bst <- xgb.train(data=dtrain, max.depth=8, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+  predict_price <- predict(bst, dtest)
+  RMLSE_Score(test_price,predict_price, FALSE)
+  toc()
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+
+}
+
+at2_1 <-xg_at2(1)
+
+at2_2 <-xg_at2(2)
+at2_3 <-xg_at2(3)
+at2_4 <-xg_at2(4)
+at2_5 <-xg_at2(5)
+
+total<-data.frame(rbind(at2_1,at2_2,at2_3,at2_4,at2_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+to_sub <-data.frame(Id=total$V1,PRICE=exp(total$predict_price))
+
+```
+
+
+```{r}
+
+xg_at3<- function(fold_num,roundn = 2600){
+  tic()
+  
+  temp_data <- data
+  temp_data$SalevYB <- as.numeric(format(as.Date(data$SALEDATE),'%Y'))-data$AYB
+  temp_data$SalevYI <- as.numeric(format(as.Date(data$SALEDATE),'%Y'))-data$EYB
+
+  train<-temp_data[temp_data$fold!=fold_num,]
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+  
+
+  train <- subset(train, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  train$PRICE = log(train$PRICE)
+  dtrain <- xgb.DMatrix(data = data.matrix(subset(train, select=-c(PRICE))), label=train$PRICE)
+  
+  test<-temp_data[temp_data$fold==fold_num,]
+  test_price <- test$PRICE
+  test<-subset(test, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  
+  
+  
+  test_price <- log(test$PRICE)
+  
+  dtest <- xgb.DMatrix(data = data.matrix(subset(test, select=-c(PRICE))), label=test_price)
+  watchlist <- list(train=dtrain, test=dtest)
+  
+  bst <- xgb.train(data=dtrain, max.depth=8, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+  predict_price <- predict(bst, dtest)
+  RMLSE_Score(test_price,predict_price, FALSE)
+  toc()
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+
+}
+
+at3_1 <-xg_at3(1)
+
+at3_2 <-xg_at3(2)
+at3_3 <-xg_at3(3)
+at3_4 <-xg_at3(4)
+at3_5 <-xg_at3(5)
+
+total<-data.frame(rbind(at3_1,at3_2,at3_3,at3_4,at3_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+to_sub <-data.frame(Id=total$V1,PRICE=exp(total$predict_price))
+#write.csv(to_sub,'../first.csv',row.names = FALSE)
+
+#this is the best
+```
+
+```{r}
+# ZHE GE CAI SHI
+temp_data <- data
+temp_data$SalevYB <- as.numeric(format(as.Date(data$SALEDATE),'%Y'))-data$AYB
+temp_data$SalevYI <- as.numeric(format(as.Date(data$SALEDATE),'%Y'))-data$EYB
+temp_data$HEAT <- as.character(data$HEAT)
+temp_data$HEAT[temp_data$HEAT=='Air Exchng'|
+                temp_data$HEAT=='Elec Base Brd'|
+                 temp_data$HEAT=='Evp Cool'|
+                 temp_data$HEAT=='Hot Water Rad'|
+                 temp_data$HEAT=='Ind Unit'|
+                 temp_data$HEAT=='Wall Furnace'|
+                 temp_data$HEAT=='Water Base Brd'|
+                 temp_data$HEAT=='Ht Pump'|
+                 temp_data$HEAT=='Gravity Furnac'
+                 ] <- 1
+temp_data$HEAT[temp_data$HEAT=='Air-Oil'|
+                temp_data$HEAT=='Electric Rad'|
+                 temp_data$HEAT=='Forced Air'|
+                temp_data$HEAT=='Warm Cool'
+                 ] <- 2
+temp_data$HEAT[temp_data$HEAT=='No Data']<-0
+temp_data$HEAT<-as.numeric(temp_data$HEAT)
+temp_data$SALEDATE <- as.Date(paste(format(as.Date(data$SALEDATE), "%Y-%m"),"-01",sep=""))
+
+
+xg_at4<- function(fold_num,roundn = 2600){
+  tic()
+  
+  train<-temp_data[temp_data$fold!=fold_num,]
+  train$PRICE = log(train$PRICE)
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+  #up <- mean(train$PRICE)+3*sd(train$PRICE)
+  #low <- mean(train$PRICE)-3*sd(train$PRICE)
+  #train <- train[train$PRICE<=up,]
+  
+  train <- subset(train, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  
+  dtrain <- xgb.DMatrix(data = data.matrix(subset(train, select=-c(PRICE))), label=train$PRICE)
+  
+  test<-temp_data[temp_data$fold==fold_num,]
+  test_price <- test$PRICE
+  test<-subset(test, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  
+  
+  test_price <- log(test$PRICE)
+  
+  dtest <- xgb.DMatrix(data = data.matrix(subset(test, select=-c(PRICE))), label=test_price)
+  watchlist <- list(train=dtrain, test=dtest)
+  
+  bst <- xgb.train(data=dtrain, max.depth=8, eta=0.02, nthread = 4, nrounds=4000, watchlist=watchlist,verbose = 0)
+  predict_price <- predict(bst, dtest)
+  RMLSE_Score(test_price,predict_price, FALSE)
+  toc()
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+
+}
+
+at4_1 <-xg_at4(1)
+at4_2 <-xg_at4(2)
+at4_3 <-xg_at4(3)
+at4_4 <-xg_at4(4)
+at4_5 <-xg_at4(5)
+
+total<-data.frame(rbind(at4_1,at4_2,at4_3,at4_4,at4_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+to_sub <-data.frame(Id=total$V1,PRICE=exp(total$predict_price))
+#write.csv(to_sub,'../first.csv',row.names = FALSE)
+
+```
+
+```{r}
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+full_name <- trim(data$FULLADDRESS)
+
+r <- regexpr("^\\s*\\d+", full_name)
+data$Number <- rep(NA,length(full_name))
+data$Number[r!=-1] <- trim(regmatches(full_name, r))
+
+#data$Number <- as.numeric(trim(regmatches(full_name,regexpr("^\\s*\\d+",full_name))))
+#data$Number <- as.numeric(trim(gsub('\\D+.*','' ,data$FULLADDRESS)))
+
+data$StreetName <- (trim(gsub('^\\s*\\d+','', full_name)))
+
+street_name_short <- trim(gsub('\\s+[E,S,W,N]{1,2}$','',full_name))
+street_name_short[street_name_short ==''] <- NA
+
+
+##data$StreetDirection <- as.numeric(factor(trim(regmatches(data$StreetName,regexpr("\\s+[E,S,W,N]{1,2}$",data$StreetName)))))
+
+r <- regexpr("\\s+[E,S,W,N]{1,2}$", data$StreetName)
+data$StreetDirection <- rep(NA,length(data$StreetName))
+data$StreetDirection[r!=-1] <- trim(regmatches(data$StreetName, r))
+
+data$Number <-as.numeric(data$Number)
+data$StreetNameShort <-as.numeric(factor(street_name_short))
+data$StreetDirection <-as.numeric(factor(data$StreetDirection))
+
+data$CENSUS_BLOCK_NUM <- as.numeric(trim(gsub('^\\d+\\s+','', data$CENSUS_BLOCK)))
+
+
+
+
+```
+NOTE! THERE IS NA
+
+```{r}
+temp_data <- data
+temp_data$SalevYB <- as.numeric(format(as.Date(data$SALEDATE),'%Y'))-data$AYB
+temp_data$SalevYI <- as.numeric(format(as.Date(data$SALEDATE),'%Y'))-data$EYB
+temp_data$HEAT <- as.character(data$HEAT)
+temp_data$HEAT[temp_data$HEAT=='Air Exchng'|
+                temp_data$HEAT=='Elec Base Brd'|
+                 temp_data$HEAT=='Evp Cool'|
+                 temp_data$HEAT=='Hot Water Rad'|
+                 temp_data$HEAT=='Ind Unit'|
+                 temp_data$HEAT=='Wall Furnace'|
+                 temp_data$HEAT=='Water Base Brd'|
+                 temp_data$HEAT=='Ht Pump'|
+                 temp_data$HEAT=='Gravity Furnac'
+                 ] <- 1
+temp_data$HEAT[temp_data$HEAT=='Air-Oil'|
+                temp_data$HEAT=='Electric Rad'|
+                 temp_data$HEAT=='Forced Air'|
+                temp_data$HEAT=='Warm Cool'
+                 ] <- 2
+temp_data$HEAT[temp_data$HEAT=='No Data']<-0
+temp_data$HEAT<-as.numeric(temp_data$HEAT)
+temp_data$SALEDATE <- as.Date(paste(format(as.Date(data$SALEDATE), "%Y-%m"),"-01",sep=""))
+
+
+xg_at5<- function(fold_num,from_fold,roundn = 2600){
+  tic()
+  
+  train<-temp_data[temp_data$fold==from_fold,]
+  train$PRICE = log(train$PRICE)
+  train<-train[as.Date(train$SALEDATE)>=as.Date('1990-01-01'),]
+  #up <- mean(train$PRICE)+3*sd(train$PRICE)
+  #low <- mean(train$PRICE)-3*sd(train$PRICE)
+  #train <- train[train$PRICE<=up,]
+  
+  train <- subset(train, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  
+  dtrain <- xgb.DMatrix(data = data.matrix(subset(train, select=-c(PRICE))), label=train$PRICE)
+  
+  test<-temp_data[temp_data$fold==fold_num,]
+  test_price <- test$PRICE
+  test<-subset(test, select=-c(Id,fold,ASSESSMENT_SUBNBHD,FULLADDRESS,NATIONALGRID,CENSUS_BLOCK))
+  
+  
+  test_price <- log(test$PRICE)
+  
+  dtest <- xgb.DMatrix(data = data.matrix(subset(test, select=-c(PRICE))), label=test_price)
+  watchlist <- list(train=dtrain, test=dtest)
+  
+  bst <- xgb.train(data=dtrain, max.depth=8, eta=0.02, nthread = 4, nrounds=3000, watchlist=watchlist,verbose = 0)
+  predict_price <- predict(bst, dtest)
+  RMLSE_Score(test_price,predict_price, FALSE)
+  toc()
+  return (cbind(data[data$fold==fold_num,]$Id,predict_price,test_price))
+
+}
+
+#at4_1 <-xg_at4(1)
+#at4_2 <-xg_at4(2)
+#at4_3 <-xg_at4(3)
+#at4_4 <-xg_at4(4)
+at5_5 <-xg_at5(5,4)
+at5_5 <-xg_at5(5,3)
+at5_5 <-xg_at5(5,2)
+at5_5 <-xg_at5(5,1)
+
+total<-data.frame(rbind(at4_1,at4_2,at4_3,at4_4,at4_5))
+RMLSE_Score(total$test_price,total$predict_price, FALSE)
+to_sub <-data.frame(Id=total$V1,PRICE=exp(total$predict_price))
+#write.csv(to_sub,'../first.csv',row.names = FALSE)
+```
+```{r}
+importance <- xgb.importance(model = bst)
+
+```

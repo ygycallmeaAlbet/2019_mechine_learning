@@ -1,0 +1,39 @@
+---
+title: "BstRf_Visualization"
+author: "Xavier"
+date: "April 16, 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Boosting
+
+I used fold one to tuned hyperparameters since all other fold has similar performance and using only one fold will save some run time.
+
+## Depth
+
+![](BoostingDepth.jpg)
+
+## nround
+
+Clearly, after around 1300 round, model tends to have some overfitting behavior 
+
+![](BoostingnroundTesting.jpg)
+
+
+![](BoostingnroundTraining.jpg)
+
+# Random Forest
+
+## Depth
+
+We choose 25 to balance the runtime and accuracy
+
+![](RandomForestDepth.jpg)
+
+## Mtry
+
+6 and 8 have really similar behavior, we choose 6
+
+![](RandomForestMtry.jpg)
